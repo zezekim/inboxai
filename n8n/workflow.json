@@ -160,7 +160,7 @@
       "typeVersion": 2,
       "position": [2120, 440],
       "parameters": {
-        "jsCode": "const merge  = $('Merge Email + Claude').first().json;\nconst email  = $('Supabase - Insert Email').first().json;\nconst gmail  = $('Gmail - Create Draft').first().json;\n\nreturn [{ json: {\n  payload: JSON.stringify({\n    email_id:      email.id,\n    draft_content: merge.draft || '',\n    gmail_draft_id: gmail.id || null,\n    status:        'pending'\n  })\n} }];"
+        "jsCode": "const merge  = $('Merge Email + Claude').first().json;\nconst email  = $('Supabase - Insert Email').first().json;\nconst gmail  = $('Gmail - Create Draft').first()?.json ?? {};\n\nreturn [{ json: {\n  payload: JSON.stringify({\n    email_id:       email.id,\n    draft_content:  merge.draft || '',\n    gmail_draft_id: gmail.id || gmail.draftId || null,\n    status:         'pending'\n  })\n} }];"
       }
     },
     {
