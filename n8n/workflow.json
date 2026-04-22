@@ -154,11 +154,21 @@
       }
     },
     {
+      "id": "a1b2c3d4-0010a-000-0000-000000000010",
+      "name": "Prepare Draft Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2120, 440],
+      "parameters": {
+        "jsCode": "const merge  = $('Merge Email + Claude').first().json;\nconst email  = $('Supabase - Insert Email').first().json;\nconst gmail  = $('Gmail - Create Draft').first().json;\n\nreturn [{ json: {\n  payload: JSON.stringify({\n    email_id:      email.id,\n    draft_content: merge.draft || '',\n    gmail_draft_id: gmail.id || null,\n    status:        'pending'\n  })\n} }];"
+      }
+    },
+    {
       "id": "a1b2c3d4-0010-0000-0000-000000000010",
       "name": "Supabase - Insert Draft",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [2120, 440],
+      "position": [2260, 440],
       "parameters": {
         "method": "POST",
         "url": "https://avoezuxzppurkghhxxar.supabase.co/rest/v1/drafts",
@@ -174,7 +184,7 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ email_id: $('Supabase - Insert Email').first().json.id, draft_content: $('Merge Email + Claude').first().json.draft, gmail_draft_id: $('Gmail - Create Draft').first().json.id, status: 'pending' }) }}",
+        "body": "={{ $json.payload }}",
         "options": {}
       }
     },
@@ -225,6 +235,9 @@
       "main": [[{ "node": "Gmail - Create Draft", "type": "main", "index": 0 }]]
     },
     "Gmail - Create Draft": {
+      "main": [[{ "node": "Prepare Draft Payload", "type": "main", "index": 0 }]]
+    },
+    "Prepare Draft Payload": {
       "main": [[{ "node": "Supabase - Insert Draft", "type": "main", "index": 0 }]]
     },
     "Supabase - Insert Draft": {
