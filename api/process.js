@@ -6,14 +6,15 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { from, fromName, subject, body, messageId, threadId } = req.body ?? {};
+  const { fromName, subject, body, messageId, threadId } = req.body ?? {};
+  const from = (req.body?.from || "").trim() || "unknown@unknown.com";
 
-  if (!from || !subject || !body) {
-    return res.status(400).json({ error: "from, subject, and body are required" });
+  if (!body) {
+    return res.status(400).json({ error: "body is required" });
   }
 
   try {
-    const result = await processEmail({ from, fromName, subject, body, messageId, threadId });
+    const result = await processEmail({ from, fromName, subject: subject || "(no subject)", body, messageId, threadId });
     res.json(result);
   } catch (err) {
     console.error("[processEmail error]", err.message);
