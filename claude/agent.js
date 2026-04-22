@@ -64,7 +64,10 @@ ${body}
     ],
   });
 
-  const raw = response.content[0].text.trim();
+  const raw = response.content[0].text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "");
 
   try {
     const result = JSON.parse(raw);
