@@ -11,13 +11,8 @@
         "pollTimes": {
           "item": [{ "mode": "everyMinute", "minute": 5 }]
         },
-        "filters": {
-          "readStatus": "unread",
-          "labels": []
-        },
-        "options": {
-          "dataPropertyAttachmentsPrefixName": "attachment_"
-        }
+        "filters": { "readStatus": "unread", "labels": [] },
+        "options": { "dataPropertyAttachmentsPrefixName": "attachment_" }
       },
       "credentials": {
         "gmailOAuth2": { "id": "GMAIL_CREDENTIAL_ID", "name": "Paul Gmail OAuth2" }
@@ -30,7 +25,7 @@
       "typeVersion": 2,
       "position": [440, 300],
       "parameters": {
-        "jsCode": "const msg = $input.first().json;\n\n// Strip HTML tags from body\nconst stripHtml = (html) => (html || '').replace(/<[^>]*>/g, ' ').replace(/\\s+/g, ' ').trim();\n\n// Decode quoted-printable or base64 body\nconst body = stripHtml(msg.text || msg.html || msg.snippet || '');\n\nreturn [{\n  json: {\n    messageId: msg.id,\n    threadId:  msg.threadId,\n    from:      msg.from?.value?.[0]?.address || msg.from || '',\n    fromName:  msg.from?.value?.[0]?.name    || '',\n    subject:   msg.subject || '(no subject)',\n    body:      body.slice(0, 4000),\n    receivedAt: msg.date || new Date().toISOString(),\n  }\n}];"
+        "jsCode": "const msg = $input.first().json;\nconst stripHtml = (html) => (html || '').replace(/<[^>]*>/g, ' ').replace(/\\s+/g, ' ').trim();\nconst body = stripHtml(msg.text || msg.html || msg.snippet || '');\nreturn [{ json: {\n  messageId:  msg.id,\n  threadId:   msg.threadId,\n  from:       msg.from?.value?.[0]?.address || msg.from || 'unknown@unknown.com',\n  fromName:   msg.from?.value?.[0]?.name    || '',\n  subject:    msg.subject || '(no subject)',\n  body:       body.slice(0, 4000),\n  receivedAt: msg.date || new Date().toISOString()\n} }];"
       }
     },
     {
@@ -41,22 +36,15 @@
       "position": [680, 300],
       "parameters": {
         "method": "POST",
-        "url": "https://YOUR_VERCEL_URL/api/process",
+        "url": "https://inboxai-omega.vercel.app/api/process",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [{ "name": "Content-Type", "value": "application/json" }]
         },
         "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            { "name": "messageId", "value": "={{ $json.messageId }}" },
-            { "name": "threadId",  "value": "={{ $json.threadId }}" },
-            { "name": "from",      "value": "={{ $json.from }}" },
-            { "name": "fromName",  "value": "={{ $json.fromName }}" },
-            { "name": "subject",   "value": "={{ $json.subject }}" },
-            { "name": "body",      "value": "={{ $json.body }}" }
-          ]
-        },
+        "contentType": "json",
+        "specifyBody": "string",
+        "body": "={{ JSON.stringify({ messageId: $json.messageId, threadId: $json.threadId, from: $json.from, fromName: $json.fromName, subject: $json.subject, body: $json.body }) }}",
         "options": {}
       }
     },
@@ -67,7 +55,7 @@
       "typeVersion": 2,
       "position": [920, 300],
       "parameters": {
-        "jsCode": "// Grab upstream nodes\nconst email   = $('Normalize Email').first().json;\nconst claude  = $input.first().json;\n\nreturn [{ json: { ...email, ...claude } }];"
+        "jsCode": "const email  = $('Normalize Email').first().json;\nconst claude = $input.first().json;\nreturn [{ json: { ...email, ...claude } }];"
       }
     },
     {
@@ -105,19 +93,20 @@
       "position": [1400, 440],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/emails",
+        "url": "https://avoezuxzppurkghhxxar.supabase.co/rest/v1/emails",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "apikey",        "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
-            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "apikey",        "value": "REDACTED_SERVICE_ROLE_KEY" },
+            { "name": "Authorization", "value": "Bearer REDACTED_SERVICE_ROLE_KEY" },
             { "name": "Content-Type",  "value": "application/json" },
             { "name": "Prefer",        "value": "return=representation" }
           ]
         },
         "sendBody": true,
         "contentType": "json",
-        "body": "={\n  \"gmail_message_id\": \"{{ $json.messageId }}\",\n  \"gmail_thread_id\":  \"{{ $json.threadId }}\",\n  \"sender_email\":     \"{{ $json.from }}\",\n  \"sender_name\":      \"{{ $json.fromName }}\",\n  \"subject\":          \"{{ $json.subject }}\",\n  \"body\":             {{ JSON.stringify($json.body) }},\n  \"received_at\":      \"{{ $json.receivedAt }}\"\n}",
+        "specifyBody": "string",
+        "body": "={{ JSON.stringify({ gmail_message_id: $json.messageId, gmail_thread_id: $json.threadId, sender_email: $json.from, sender_name: $json.fromName, subject: $json.subject, body: $json.body, received_at: $json.receivedAt }) }}",
         "options": {}
       }
     },
@@ -129,19 +118,20 @@
       "position": [1640, 440],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/classifications",
+        "url": "https://avoezuxzppurkghhxxar.supabase.co/rest/v1/classifications",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "apikey",        "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
-            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "apikey",        "value": "REDACTED_SERVICE_ROLE_KEY" },
+            { "name": "Authorization", "value": "Bearer REDACTED_SERVICE_ROLE_KEY" },
             { "name": "Content-Type",  "value": "application/json" },
             { "name": "Prefer",        "value": "return=representation" }
           ]
         },
         "sendBody": true,
         "contentType": "json",
-        "body": "={\n  \"email_id\":      \"{{ $('Supabase - Insert Email').first().json.id }}\",\n  \"category\":      \"{{ $('Merge Email + Claude').first().json.category }}\",\n  \"urgency_score\": {{ $('Merge Email + Claude').first().json.urgencyScore }},\n  \"urgency_label\": \"{{ $('Merge Email + Claude').first().json.urgencyLabel }}\",\n  \"reasoning\":     {{ JSON.stringify($('Merge Email + Claude').first().json.reasoning) }}\n}",
+        "specifyBody": "string",
+        "body": "={{ JSON.stringify({ email_id: $('Supabase - Insert Email').first().json.id, category: $('Merge Email + Claude').first().json.category, urgency_score: Number($('Merge Email + Claude').first().json.urgencyScore), urgency_label: $('Merge Email + Claude').first().json.urgencyLabel, reasoning: $('Merge Email + Claude').first().json.reasoning }) }}",
         "options": {}
       }
     },
@@ -173,19 +163,20 @@
       "position": [2120, 440],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/drafts",
+        "url": "https://avoezuxzppurkghhxxar.supabase.co/rest/v1/drafts",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "apikey",        "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
-            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "apikey",        "value": "REDACTED_SERVICE_ROLE_KEY" },
+            { "name": "Authorization", "value": "Bearer REDACTED_SERVICE_ROLE_KEY" },
             { "name": "Content-Type",  "value": "application/json" },
             { "name": "Prefer",        "value": "return=representation" }
           ]
         },
         "sendBody": true,
         "contentType": "json",
-        "body": "={\n  \"email_id\":      \"{{ $('Supabase - Insert Email').first().json.id }}\",\n  \"draft_content\": {{ JSON.stringify($('Merge Email + Claude').first().json.draft) }},\n  \"gmail_draft_id\": \"{{ $('Gmail - Create Draft').first().json.id }}\",\n  \"status\":        \"pending\"\n}",
+        "specifyBody": "string",
+        "body": "={{ JSON.stringify({ email_id: $('Supabase - Insert Email').first().json.id, draft_content: $('Merge Email + Claude').first().json.draft, gmail_draft_id: $('Gmail - Create Draft').first().json.id, status: 'pending' }) }}",
         "options": {}
       }
     },
@@ -197,14 +188,15 @@
       "position": [2360, 440],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "url": "SLACK_WEBHOOK_URL_HERE",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [{ "name": "Content-Type", "value": "application/json" }]
         },
         "sendBody": true,
         "contentType": "json",
-        "body": "={{ (() => {\n  const d = $('Merge Email + Claude').first().json;\n  const emailId = $('Supabase - Insert Email').first().json.id;\n  const emojis = { hot: '🔴', warm: '🟡', cold: '🟢', skip: '⚪' };\n  const cats   = { lead_inquiry: 'New Lead', existing_client: 'Existing Client', agent_colleague: 'Agent / Colleague', listing_related: 'Listing / Vendor', spam: 'Spam' };\n  const emoji  = emojis[d.urgencyLabel] || '⚪';\n  const preview = (d.draft || '').slice(0, 280);\n  return JSON.stringify({\n    blocks: [\n      { type: 'header', text: { type: 'plain_text', text: emoji + ' ' + d.subject, emoji: true } },\n      { type: 'section', fields: [\n          { type: 'mrkdwn', text: '*From:*\\n' + (d.fromName ? d.fromName + ' <' + d.from + '>' : d.from) },\n          { type: 'mrkdwn', text: '*Classification:*\\n' + (cats[d.category] || d.category) },\n          { type: 'mrkdwn', text: '*Urgency:*\\n' + emoji + ' ' + d.urgencyLabel.toUpperCase() + ' (' + d.urgencyScore + '/5)' },\n          { type: 'mrkdwn', text: '*Why:*\\n' + d.reasoning }\n      ]},\n      { type: 'divider' },\n      { type: 'section', text: { type: 'mrkdwn', text: '*Draft Preview:*\\n```' + preview + (d.draft.length > 280 ? '…' : '') + '```' } },\n      { type: 'context', elements: [{ type: 'mrkdwn', text: 'Email ID: `' + emailId + '` · Review in Gmail Drafts' }] }\n    ]\n  });\n})() }}",
+        "specifyBody": "string",
+        "body": "={{ (() => { const d = $('Merge Email + Claude').first().json; const emailId = $('Supabase - Insert Email').first().json.id; const emojis = { hot: '🔴', warm: '🟡', cold: '🟢', skip: '⚪' }; const cats = { lead_inquiry: 'New Lead', existing_client: 'Existing Client', agent_colleague: 'Agent / Colleague', listing_related: 'Listing / Vendor', spam: 'Spam' }; const emoji = emojis[d.urgencyLabel] || '⚪'; const preview = (d.draft || '').slice(0, 280); return JSON.stringify({ blocks: [ { type: 'header', text: { type: 'plain_text', text: emoji + ' ' + d.subject, emoji: true } }, { type: 'section', fields: [ { type: 'mrkdwn', text: '*From:*\\n' + (d.fromName ? d.fromName + ' <' + d.from + '>' : d.from) }, { type: 'mrkdwn', text: '*Classification:*\\n' + (cats[d.category] || d.category) }, { type: 'mrkdwn', text: '*Urgency:*\\n' + emoji + ' ' + d.urgencyLabel.toUpperCase() + ' (' + d.urgencyScore + '/5)' }, { type: 'mrkdwn', text: '*Why:*\\n' + d.reasoning } ] }, { type: 'divider' }, { type: 'section', text: { type: 'mrkdwn', text: '*Draft Preview:*\\n```' + preview + (d.draft.length > 280 ? '…' : '') + '```' } }, { type: 'context', elements: [{ type: 'mrkdwn', text: 'Email ID: `' + emailId + '` · Review in Gmail Drafts' }] } ] }); })() }}",
         "options": {}
       }
     }
