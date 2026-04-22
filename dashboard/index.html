@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>InboxAI — Paul Smith / Twelve Rivers Realty</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .urgency-hot  { border-left: 4px solid #ef4444; }
+    .urgency-warm { border-left: 4px solid #f59e0b; }
+    .urgency-cold { border-left: 4px solid #22c55e; }
+    .urgency-skip { border-left: 4px solid #9ca3af; }
+    .badge-hot    { background: #fef2f2; color: #dc2626; }
+    .badge-warm   { background: #fffbeb; color: #d97706; }
+    .badge-cold   { background: #f0fdf4; color: #16a34a; }
+    .badge-skip   { background: #f9fafb; color: #6b7280; }
+    .badge-lead_inquiry     { background: #eff6ff; color: #1d4ed8; }
+    .badge-existing_client  { background: #faf5ff; color: #7c3aed; }
+    .badge-agent_colleague  { background: #fff7ed; color: #c2410c; }
+    .badge-listing_related  { background: #ecfdf5; color: #065f46; }
+    .badge-spam             { background: #f9fafb; color: #6b7280; }
+    .draft-box { white-space: pre-wrap; font-family: monospace; font-size: 0.8rem; }
+    .fade-in { animation: fadeIn 0.2s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+  <!-- Header -->
+  <header class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-10 shadow-sm">
+    <div>
+      <h1 class="text-lg font-semibold text-gray-900">InboxAI</h1>
+      <p class="text-xs text-gray-400">Paul Smith · Twelve Rivers Realty</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <select id="filterUrgency" class="text-sm border border-gray-200 rounded-md px-3 py-1.5 bg-white text-gray-700">
+        <option value="">All urgency</option>
+        <option value="hot">🔴 Hot</option>
+        <option value="warm">🟡 Warm</option>
+        <option value="cold">🟢 Cold</option>
+      </select>
+      <select id="filterStatus" class="text-sm border border-gray-200 rounded-md px-3 py-1.5 bg-white text-gray-700">
+        <option value="">All statuses</option>
+        <option value="pending">Pending</option>
+        <option value="reviewed">Reviewed</option>
+        <option value="sent">Sent</option>
+        <option value="discarded">Discarded</option>
+      </select>
+      <button onclick="loadEmails()" class="text-sm bg-gray-900 text-white px-3 py-1.5 rounded-md hover:bg-gray-700">Refresh</button>
+    </div>
+  </header>
+
+  <!-- Stats bar -->
+  <div id="stats" class="bg-white border-b border-gray-100 px-6 py-3 flex gap-6 text-sm text-gray-500"></div>
+
+  <!-- Email list -->
+  <main class="max-w-4xl mx-auto px-4 py-6 space-y-4" id="emailList">
+    <p class="text-gray-400 text-sm text-center py-10">Loading…</p>
+  </main>
+
+  <!-- Draft modal -->
+  <div id="modal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onclick="if(event.target===this)closeModal()">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between px-6 py-4 border-b">
+        <h2 class="font-semibold text-gray-900" id="modalTitle">Draft</h2>
+        <button onclick="closeModal()" class="text-gray-400 hover:text-gray-700 text-xl leading-none">&times;</button>
+      </div>
+      <div class="flex-1 overflow-auto px-6 py-4">
+        <textarea id="modalDraft" class="w-full h-96 text-sm font-mono border border-gray-200 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-gray-900"></textarea>
+      </div>
+      <div class="px-6 py-4 border-t flex gap-2 justify-end">
+        <button onclick="markStatus('discarded')" class="text-sm px-4 py-2 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50">Discard</button>
+        <button onclick="markStatus('reviewed')"  class="text-sm px-4 py-2 rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100">Mark Reviewed</button>
+        <button onclick="markStatus('sent')"      class="text-sm px-4 py-2 rounded-md bg-gray-900 text-white hover:bg-gray-700">Mark Sent</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── Config ────────────────────────────────────────────────────────────────
+    const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+    const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+    const { createClient } = supabase;
+    const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // ── State ─────────────────────────────────────────────────────────────────
+    let emails = [];
+    let activeDraftId = null;
+
+    const URGENCY_EMOJI  = { hot:'🔴', warm:'🟡', cold:'🟢', skip:'⚪' };
+    const CATEGORY_LABEL = {
+      lead_inquiry:    'New Lead',
+      existing_client: 'Existing Client',
+      agent_colleague: 'Agent / Colleague',
+      listing_related: 'Listing / Vendor',
+      spam:            'Spam',
+    };
+
+    // ── Load ──────────────────────────────────────────────────────────────────
+    async function loadEmails() {
+      const urgency = document.getElementById('filterUrgency').value;
+      const status  = document.getElementById('filterStatus').value;
+
+      let q = db.from('triage_summary').select('*').order('received_at', { ascending: false }).limit(100);
+      if (urgency) q = q.eq('urgency_label', urgency);
+      if (status)  q = q.eq('draft_status', status);
+
+      const { data, error } = await q;
+      if (error) { console.error(error); return; }
+
+      emails = data || [];
+      renderStats();
+      renderList();
+    }
+
+    function renderStats() {
+      const counts = { hot: 0, warm: 0, cold: 0, pending: 0, reviewed: 0 };
+      emails.forEach(e => {
+        if (e.urgency_label && counts[e.urgency_label] !== undefined) counts[e.urgency_label]++;
+        if (e.draft_status === 'pending')  counts.pending++;
+        if (e.draft_status === 'reviewed') counts.reviewed++;
+      });
+      document.getElementById('stats').innerHTML = `
+        <span>🔴 <strong>${counts.hot}</strong> hot</span>
+        <span>🟡 <strong>${counts.warm}</strong> warm</span>
+        <span>🟢 <strong>${counts.cold}</strong> cold</span>
+        <span class="ml-4">📬 <strong>${counts.pending}</strong> pending review</span>
+        <span>✅ <strong>${counts.reviewed}</strong> reviewed</span>
+        <span class="ml-4 text-gray-400">${emails.length} total</span>
+      `;
+    }
+
+    function renderList() {
+      const list = document.getElementById('emailList');
+      if (!emails.length) {
+        list.innerHTML = '<p class="text-gray-400 text-sm text-center py-10">No emails found.</p>';
+        return;
+      }
+
+      list.innerHTML = emails.map(e => {
+        const emoji   = URGENCY_EMOJI[e.urgency_label] || '⚪';
+        const catLabel = CATEGORY_LABEL[e.category] || e.category;
+        const sender   = e.sender_name ? `${e.sender_name} <${e.sender_email}>` : e.sender_email;
+        const preview  = (e.draft_content || '').replace(/\n/g,' ').slice(0, 120);
+        const ts       = new Date(e.received_at).toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+        const statusDot = e.draft_status === 'reviewed' ? '✅' : e.draft_status === 'sent' ? '📤' : e.draft_status === 'discarded' ? '🗑' : '📝';
+
+        return `
+          <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 urgency-${e.urgency_label} fade-in cursor-pointer hover:shadow-md transition-shadow"
+               onclick='openModal(${JSON.stringify(e)})'>
+            <div class="flex items-start justify-between gap-4">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="text-xs font-medium px-2 py-0.5 rounded-full badge-${e.urgency_label}">${emoji} ${(e.urgency_label||'').toUpperCase()} · ${e.urgency_score}/5</span>
+                  <span class="text-xs font-medium px-2 py-0.5 rounded-full badge-${e.category}">${catLabel}</span>
+                  <span class="text-xs text-gray-400">${statusDot} ${e.draft_status || ''}</span>
+                </div>
+                <p class="font-medium text-gray-900 text-sm truncate">${e.subject || '(no subject)'}</p>
+                <p class="text-xs text-gray-500 mt-0.5 truncate">${sender}</p>
+                <p class="text-xs text-gray-400 mt-2 italic truncate">${preview || 'No draft generated.'}</p>
+              </div>
+              <div class="text-right text-xs text-gray-400 shrink-0">
+                <div>${ts}</div>
+                ${e.reasoning ? `<div class="mt-1 text-gray-400 max-w-[160px] text-right leading-snug">${e.reasoning}</div>` : ''}
+              </div>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    // ── Modal ─────────────────────────────────────────────────────────────────
+    function openModal(email) {
+      activeDraftId = email.draft_id;
+      document.getElementById('modalTitle').textContent = email.subject || '(no subject)';
+      document.getElementById('modalDraft').value = email.draft_content || '';
+      document.getElementById('modal').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('modal').classList.add('hidden');
+      activeDraftId = null;
+    }
+
+    async function markStatus(status) {
+      if (!activeDraftId) return;
+      const { error } = await db
+        .from('drafts')
+        .update({ status, reviewed_at: new Date().toISOString() })
+        .eq('id', activeDraftId);
+
+      if (error) { alert('Update failed: ' + error.message); return; }
+      closeModal();
+      loadEmails();
+    }
+
+    // ── Init ──────────────────────────────────────────────────────────────────
+    document.getElementById('filterUrgency').addEventListener('change', loadEmails);
+    document.getElementById('filterStatus').addEventListener('change', loadEmails);
+    loadEmails();
+  </script>
+</body>
+</html>

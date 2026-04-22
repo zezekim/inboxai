@@ -1,0 +1,251 @@
+{
+  "name": "InboxAI - Gmail Triage",
+  "nodes": [
+    {
+      "id": "a1b2c3d4-0001-0000-0000-000000000001",
+      "name": "Gmail Trigger",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1,
+      "position": [200, 300],
+      "parameters": {
+        "pollTimes": {
+          "item": [{ "mode": "everyMinute", "minute": 5 }]
+        },
+        "filters": {
+          "readStatus": "unread",
+          "labels": []
+        },
+        "options": {
+          "dataPropertyAttachmentsPrefixName": "attachment_"
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": { "id": "GMAIL_CREDENTIAL_ID", "name": "Paul Gmail OAuth2" }
+      }
+    },
+    {
+      "id": "a1b2c3d4-0002-0000-0000-000000000002",
+      "name": "Normalize Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300],
+      "parameters": {
+        "jsCode": "const msg = $input.first().json;\n\n// Strip HTML tags from body\nconst stripHtml = (html) => (html || '').replace(/<[^>]*>/g, ' ').replace(/\\s+/g, ' ').trim();\n\n// Decode quoted-printable or base64 body\nconst body = stripHtml(msg.text || msg.html || msg.snippet || '');\n\nreturn [{\n  json: {\n    messageId: msg.id,\n    threadId:  msg.threadId,\n    from:      msg.from?.value?.[0]?.address || msg.from || '',\n    fromName:  msg.from?.value?.[0]?.name    || '',\n    subject:   msg.subject || '(no subject)',\n    body:      body.slice(0, 4000),\n    receivedAt: msg.date || new Date().toISOString(),\n  }\n}];"
+      }
+    },
+    {
+      "id": "a1b2c3d4-0003-0000-0000-000000000003",
+      "name": "Claude - Classify & Draft",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_VERCEL_URL/api/process",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "messageId", "value": "={{ $json.messageId }}" },
+            { "name": "threadId",  "value": "={{ $json.threadId }}" },
+            { "name": "from",      "value": "={{ $json.from }}" },
+            { "name": "fromName",  "value": "={{ $json.fromName }}" },
+            { "name": "subject",   "value": "={{ $json.subject }}" },
+            { "name": "body",      "value": "={{ $json.body }}" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a1b2c3d4-0004-0000-0000-000000000004",
+      "name": "Merge Email + Claude",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [920, 300],
+      "parameters": {
+        "jsCode": "// Grab upstream nodes\nconst email   = $('Normalize Email').first().json;\nconst claude  = $input.first().json;\n\nreturn [{ json: { ...email, ...claude } }];"
+      }
+    },
+    {
+      "id": "a1b2c3d4-0005-0000-0000-000000000005",
+      "name": "Skip Spam?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1160, 300],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false },
+          "conditions": [
+            {
+              "leftValue":  "={{ $json.urgencyLabel }}",
+              "rightValue": "skip",
+              "operator":   { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "a1b2c3d4-0006-0000-0000-000000000006",
+      "name": "Stop (Spam)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1400, 160]
+    },
+    {
+      "id": "a1b2c3d4-0007-0000-0000-000000000007",
+      "name": "Supabase - Insert Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1400, 440],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/emails",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",        "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Prefer",        "value": "return=representation" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={\n  \"gmail_message_id\": \"{{ $json.messageId }}\",\n  \"gmail_thread_id\":  \"{{ $json.threadId }}\",\n  \"sender_email\":     \"{{ $json.from }}\",\n  \"sender_name\":      \"{{ $json.fromName }}\",\n  \"subject\":          \"{{ $json.subject }}\",\n  \"body\":             {{ JSON.stringify($json.body) }},\n  \"received_at\":      \"{{ $json.receivedAt }}\"\n}",
+        "options": {}
+      }
+    },
+    {
+      "id": "a1b2c3d4-0008-0000-0000-000000000008",
+      "name": "Supabase - Insert Classification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1640, 440],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/classifications",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",        "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Prefer",        "value": "return=representation" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={\n  \"email_id\":      \"{{ $('Supabase - Insert Email').first().json.id }}\",\n  \"category\":      \"{{ $('Merge Email + Claude').first().json.category }}\",\n  \"urgency_score\": {{ $('Merge Email + Claude').first().json.urgencyScore }},\n  \"urgency_label\": \"{{ $('Merge Email + Claude').first().json.urgencyLabel }}\",\n  \"reasoning\":     {{ JSON.stringify($('Merge Email + Claude').first().json.reasoning) }}\n}",
+        "options": {}
+      }
+    },
+    {
+      "id": "a1b2c3d4-0009-0000-0000-000000000009",
+      "name": "Gmail - Create Draft",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [1880, 440],
+      "parameters": {
+        "operation": "createDraft",
+        "sendTo": "={{ $('Merge Email + Claude').first().json.from }}",
+        "subject": "=Re: {{ $('Merge Email + Claude').first().json.subject }}",
+        "emailType": "text",
+        "message": "={{ $('Merge Email + Claude').first().json.draft }}",
+        "options": {
+          "threadId": "={{ $('Merge Email + Claude').first().json.threadId }}"
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": { "id": "GMAIL_CREDENTIAL_ID", "name": "Paul Gmail OAuth2" }
+      }
+    },
+    {
+      "id": "a1b2c3d4-0010-0000-0000-000000000010",
+      "name": "Supabase - Insert Draft",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2120, 440],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/drafts",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",        "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Prefer",        "value": "return=representation" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={\n  \"email_id\":      \"{{ $('Supabase - Insert Email').first().json.id }}\",\n  \"draft_content\": {{ JSON.stringify($('Merge Email + Claude').first().json.draft) }},\n  \"gmail_draft_id\": \"{{ $('Gmail - Create Draft').first().json.id }}\",\n  \"status\":        \"pending\"\n}",
+        "options": {}
+      }
+    },
+    {
+      "id": "a1b2c3d4-0011-0000-0000-000000000011",
+      "name": "Slack - Notify",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2360, 440],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ (() => {\n  const d = $('Merge Email + Claude').first().json;\n  const emailId = $('Supabase - Insert Email').first().json.id;\n  const emojis = { hot: '🔴', warm: '🟡', cold: '🟢', skip: '⚪' };\n  const cats   = { lead_inquiry: 'New Lead', existing_client: 'Existing Client', agent_colleague: 'Agent / Colleague', listing_related: 'Listing / Vendor', spam: 'Spam' };\n  const emoji  = emojis[d.urgencyLabel] || '⚪';\n  const preview = (d.draft || '').slice(0, 280);\n  return JSON.stringify({\n    blocks: [\n      { type: 'header', text: { type: 'plain_text', text: emoji + ' ' + d.subject, emoji: true } },\n      { type: 'section', fields: [\n          { type: 'mrkdwn', text: '*From:*\\n' + (d.fromName ? d.fromName + ' <' + d.from + '>' : d.from) },\n          { type: 'mrkdwn', text: '*Classification:*\\n' + (cats[d.category] || d.category) },\n          { type: 'mrkdwn', text: '*Urgency:*\\n' + emoji + ' ' + d.urgencyLabel.toUpperCase() + ' (' + d.urgencyScore + '/5)' },\n          { type: 'mrkdwn', text: '*Why:*\\n' + d.reasoning }\n      ]},\n      { type: 'divider' },\n      { type: 'section', text: { type: 'mrkdwn', text: '*Draft Preview:*\\n```' + preview + (d.draft.length > 280 ? '…' : '') + '```' } },\n      { type: 'context', elements: [{ type: 'mrkdwn', text: 'Email ID: `' + emailId + '` · Review in Gmail Drafts' }] }\n    ]\n  });\n})() }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Gmail Trigger": {
+      "main": [[{ "node": "Normalize Email", "type": "main", "index": 0 }]]
+    },
+    "Normalize Email": {
+      "main": [[{ "node": "Claude - Classify & Draft", "type": "main", "index": 0 }]]
+    },
+    "Claude - Classify & Draft": {
+      "main": [[{ "node": "Merge Email + Claude", "type": "main", "index": 0 }]]
+    },
+    "Merge Email + Claude": {
+      "main": [[{ "node": "Skip Spam?", "type": "main", "index": 0 }]]
+    },
+    "Skip Spam?": {
+      "main": [
+        [{ "node": "Stop (Spam)", "type": "main", "index": 0 }],
+        [{ "node": "Supabase - Insert Email", "type": "main", "index": 0 }]
+      ]
+    },
+    "Supabase - Insert Email": {
+      "main": [[{ "node": "Supabase - Insert Classification", "type": "main", "index": 0 }]]
+    },
+    "Supabase - Insert Classification": {
+      "main": [[{ "node": "Gmail - Create Draft", "type": "main", "index": 0 }]]
+    },
+    "Gmail - Create Draft": {
+      "main": [[{ "node": "Supabase - Insert Draft", "type": "main", "index": 0 }]]
+    },
+    "Supabase - Insert Draft": {
+      "main": [[{ "node": "Slack - Notify", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "pinData": {}
+}

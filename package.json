@@ -1,0 +1,15 @@
+{
+  "name": "inboxai",
+  "version": "1.0.0",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "dev": "node --watch claude/server.js",
+    "start": "node claude/server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.36.0",
+    "express": "^4.18.2",
+    "dotenv": "^16.4.5"
+  }
+}
