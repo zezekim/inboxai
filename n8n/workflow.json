@@ -91,14 +91,14 @@
       "position": [1400, 440],
       "parameters": {
         "method": "POST",
-        "url": "https://avoezuxzppurkghhxxar.supabase.co/rest/v1/emails",
+        "url": "https://avoezuxzppurkghhxxar.supabase.co/rest/v1/emails?on_conflict=gmail_message_id",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             { "name": "apikey",        "value": "REDACTED_SERVICE_ROLE_KEY" },
             { "name": "Authorization", "value": "Bearer REDACTED_SERVICE_ROLE_KEY" },
             { "name": "Content-Type",  "value": "application/json" },
-            { "name": "Prefer",        "value": "return=representation" }
+            { "name": "Prefer",        "value": "return=representation,resolution=merge-duplicates" }
           ]
         },
         "sendBody": true,
