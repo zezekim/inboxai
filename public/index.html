@@ -23,6 +23,7 @@
     .badge-spam             { background: #f9fafb; color: #6b7280; }
     .fade-in { animation: fadeIn 0.2s ease; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    .email-body { white-space: pre-wrap; word-break: break-word; }
   </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -59,34 +60,78 @@
     <p class="text-gray-400 text-sm text-center py-10">Loading…</p>
   </main>
 
-  <!-- Draft modal -->
-  <div id="modal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onclick="if(event.target===this)closeModal()">
-    <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-      <div class="flex items-center justify-between px-6 py-4 border-b">
-        <h2 class="font-semibold text-gray-900" id="modalTitle">Draft</h2>
-        <button onclick="closeModal()" class="text-gray-400 hover:text-gray-700 text-xl leading-none">&times;</button>
+  <!-- Modal -->
+  <div id="modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onclick="if(event.target===this)closeModal()">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col">
+
+      <!-- Modal header -->
+      <div class="flex items-start justify-between px-6 py-4 border-b gap-4">
+        <div class="flex-1 min-w-0">
+          <p class="text-xs text-gray-400 mb-1" id="modalSender"></p>
+          <h2 class="font-semibold text-gray-900 text-base leading-snug" id="modalTitle"></h2>
+          <div class="flex items-center gap-2 mt-1.5" id="modalBadges"></div>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <a id="gmailLink" href="#" target="_blank"
+             class="text-xs px-3 py-1.5 rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium hidden">
+            Open in Gmail ↗
+          </a>
+          <button onclick="closeModal()" class="text-gray-400 hover:text-gray-700 text-xl leading-none">&times;</button>
+        </div>
       </div>
-      <div class="flex-1 overflow-auto px-6 py-4">
-        <textarea id="modalDraft" class="w-full h-96 text-sm font-mono border border-gray-200 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-gray-900"></textarea>
+
+      <!-- Two-panel body -->
+      <div class="flex flex-1 overflow-hidden divide-x divide-gray-100">
+
+        <!-- Left: Original email -->
+        <div class="w-2/5 flex flex-col overflow-hidden">
+          <div class="px-4 py-2 bg-gray-50 border-b border-gray-100">
+            <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Original Email</p>
+          </div>
+          <div class="flex-1 overflow-auto px-4 py-4">
+            <p id="emailBody" class="email-body text-sm text-gray-700 leading-relaxed"></p>
+          </div>
+        </div>
+
+        <!-- Right: Editable draft -->
+        <div class="w-3/5 flex flex-col overflow-hidden">
+          <div class="px-4 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+            <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">AI Draft — Edit before sending</p>
+            <span id="saveStatus" class="text-xs text-gray-400"></span>
+          </div>
+          <div class="flex-1 overflow-auto px-4 py-4">
+            <textarea id="modalDraft"
+              oninput="onDraftEdit()"
+              class="w-full h-full min-h-[360px] text-sm font-mono border-0 resize-none focus:outline-none text-gray-800 leading-relaxed bg-white">
+            </textarea>
+          </div>
+        </div>
       </div>
-      <div class="px-6 py-4 border-t flex gap-2 justify-end">
-        <button onclick="markStatus('discarded')" class="text-sm px-4 py-2 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50">Discard</button>
-        <button onclick="markStatus('reviewed')"  class="text-sm px-4 py-2 rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100">Mark Reviewed</button>
-        <button onclick="markStatus('sent')"      class="text-sm px-4 py-2 rounded-md bg-gray-900 text-white hover:bg-gray-700">Mark Sent</button>
+
+      <!-- Modal footer -->
+      <div class="px-6 py-4 border-t bg-gray-50 flex items-center justify-between gap-3 rounded-b-xl">
+        <p class="text-xs text-gray-400" id="modalReasoning"></p>
+        <div class="flex gap-2 shrink-0">
+          <button onclick="markStatus('discarded')" class="text-sm px-4 py-2 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-100">Discard</button>
+          <button onclick="saveDraftEdits()" class="text-sm px-4 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100">Save Edits</button>
+          <button onclick="markStatus('reviewed')" class="text-sm px-4 py-2 rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100">Mark Reviewed</button>
+          <button onclick="markStatus('sent')" class="text-sm px-4 py-2 rounded-md bg-gray-900 text-white hover:bg-gray-700">Mark Sent</button>
+        </div>
       </div>
     </div>
   </div>
 
   <script>
-    const SUPABASE_URL     = 'https://avoezuxzppurkghhxxar.supabase.co';
+    const SUPABASE_URL      = 'https://avoezuxzppurkghhxxar.supabase.co';
     const SUPABASE_ANON_KEY = 'REDACTED_ANON_KEY';
     const { createClient } = supabase;
     const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     let emails = [];
     let activeDraftId = null;
+    let draftEditTimer = null;
 
-    const URGENCY_EMOJI  = { hot:'🔴', warm:'🟡', cold:'🟢', skip:'⚪' };
+    const URGENCY_EMOJI  = { hot: '🔴', warm: '🟡', cold: '🟢', skip: '⚪' };
     const CATEGORY_LABEL = {
       lead_inquiry:    'New Lead',
       existing_client: 'Existing Client',
@@ -105,7 +150,6 @@
 
       const { data, error } = await q;
       if (error) { console.error(error); return; }
-
       emails = data || [];
       renderStats();
       renderList();
@@ -134,22 +178,20 @@
         list.innerHTML = '<p class="text-gray-400 text-sm text-center py-10">No emails found.</p>';
         return;
       }
-
       list.innerHTML = emails.map(e => {
         const emoji    = URGENCY_EMOJI[e.urgency_label] || '⚪';
         const catLabel = CATEGORY_LABEL[e.category] || e.category;
         const sender   = e.sender_name ? `${e.sender_name} <${e.sender_email}>` : e.sender_email;
-        const preview  = (e.draft_content || '').replace(/\n/g,' ').slice(0, 120);
-        const ts       = new Date(e.received_at).toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+        const preview  = (e.draft_content || '').replace(/\n/g, ' ').slice(0, 120);
+        const ts       = new Date(e.received_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
         const statusDot = e.draft_status === 'reviewed' ? '✅' : e.draft_status === 'sent' ? '📤' : e.draft_status === 'discarded' ? '🗑' : '📝';
-
         return `
           <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 urgency-${e.urgency_label} fade-in cursor-pointer hover:shadow-md transition-shadow"
                onclick='openModal(${JSON.stringify(e)})'>
             <div class="flex items-start justify-between gap-4">
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 mb-1">
-                  <span class="text-xs font-medium px-2 py-0.5 rounded-full badge-${e.urgency_label}">${emoji} ${(e.urgency_label||'').toUpperCase()} · ${e.urgency_score}/5</span>
+                  <span class="text-xs font-medium px-2 py-0.5 rounded-full badge-${e.urgency_label}">${emoji} ${(e.urgency_label || '').toUpperCase()} · ${e.urgency_score}/5</span>
                   <span class="text-xs font-medium px-2 py-0.5 rounded-full badge-${e.category}">${catLabel}</span>
                   <span class="text-xs text-gray-400">${statusDot} ${e.draft_status || ''}</span>
                 </div>
@@ -159,7 +201,7 @@
               </div>
               <div class="text-right text-xs text-gray-400 shrink-0">
                 <div>${ts}</div>
-                ${e.reasoning ? `<div class="mt-1 text-gray-400 max-w-[160px] text-right leading-snug">${e.reasoning}</div>` : ''}
+                ${e.reasoning ? `<div class="mt-1 max-w-[180px] text-right leading-snug">${e.reasoning}</div>` : ''}
               </div>
             </div>
           </div>`;
@@ -168,23 +210,63 @@
 
     function openModal(email) {
       activeDraftId = email.draft_id;
-      document.getElementById('modalTitle').textContent = email.subject || '(no subject)';
-      document.getElementById('modalDraft').value = email.draft_content || '';
+
+      const emoji    = URGENCY_EMOJI[email.urgency_label] || '⚪';
+      const catLabel = CATEGORY_LABEL[email.category] || email.category;
+      const sender   = email.sender_name ? `${email.sender_name} <${email.sender_email}>` : email.sender_email;
+
+      document.getElementById('modalSender').textContent  = sender;
+      document.getElementById('modalTitle').textContent   = email.subject || '(no subject)';
+      document.getElementById('modalReasoning').textContent = email.reasoning || '';
+      document.getElementById('modalDraft').value         = email.draft_content || '';
+      document.getElementById('emailBody').textContent    = email.email_body || '(no email body stored)';
+      document.getElementById('saveStatus').textContent   = '';
+
+      document.getElementById('modalBadges').innerHTML = `
+        <span class="text-xs font-medium px-2 py-0.5 rounded-full badge-${email.urgency_label}">${emoji} ${(email.urgency_label || '').toUpperCase()} · ${email.urgency_score}/5</span>
+        <span class="text-xs font-medium px-2 py-0.5 rounded-full badge-${email.category}">${catLabel}</span>
+      `;
+
+      const gmailLink = document.getElementById('gmailLink');
+      if (email.gmail_draft_id) {
+        gmailLink.href = `https://mail.google.com/mail/u/0/#drafts/${email.gmail_draft_id}`;
+        gmailLink.classList.remove('hidden');
+      } else {
+        gmailLink.classList.add('hidden');
+      }
+
       document.getElementById('modal').classList.remove('hidden');
     }
 
     function closeModal() {
       document.getElementById('modal').classList.add('hidden');
       activeDraftId = null;
+      clearTimeout(draftEditTimer);
+    }
+
+    function onDraftEdit() {
+      document.getElementById('saveStatus').textContent = 'Unsaved changes…';
+      clearTimeout(draftEditTimer);
+      draftEditTimer = setTimeout(saveDraftEdits, 2000);
+    }
+
+    async function saveDraftEdits() {
+      if (!activeDraftId) return;
+      const content = document.getElementById('modalDraft').value;
+      const { error } = await db
+        .from('drafts')
+        .update({ draft_content: content })
+        .eq('id', activeDraftId);
+      document.getElementById('saveStatus').textContent = error ? '⚠ Save failed' : '✓ Saved';
     }
 
     async function markStatus(status) {
       if (!activeDraftId) return;
+      await saveDraftEdits();
       const { error } = await db
         .from('drafts')
         .update({ status, reviewed_at: new Date().toISOString() })
         .eq('id', activeDraftId);
-
       if (error) { alert('Update failed: ' + error.message); return; }
       closeModal();
       loadEmails();
