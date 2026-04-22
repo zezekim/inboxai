@@ -9,12 +9,12 @@ export default async function handler(req, res) {
   const { fromName, subject, body, messageId, threadId } = req.body ?? {};
   const from = (req.body?.from || "").trim() || "unknown@unknown.com";
 
-  if (!body) {
-    return res.status(400).json({ error: "body is required" });
+  if (!subject && !body) {
+    return res.status(400).json({ error: "at least subject or body is required" });
   }
 
   try {
-    const result = await processEmail({ from, fromName, subject: subject || "(no subject)", body, messageId, threadId });
+    const result = await processEmail({ from, fromName, subject: subject || "(no subject)", body: body || "", messageId, threadId });
     res.json(result);
   } catch (err) {
     console.error("[processEmail error]", err.message);
