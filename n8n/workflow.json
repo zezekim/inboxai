@@ -8,9 +8,7 @@
       "typeVersion": 1,
       "position": [200, 300],
       "parameters": {
-        "pollTimes": {
-          "item": [{ "mode": "everyMinute", "minute": 5 }]
-        },
+        "pollTimes": { "item": [{ "mode": "everyMinute", "minute": 5 }] },
         "filters": { "readStatus": "unread", "labels": [] },
         "options": { "dataPropertyAttachmentsPrefixName": "attachment_" }
       },
@@ -42,8 +40,8 @@
           "parameters": [{ "name": "Content-Type", "value": "application/json" }]
         },
         "sendBody": true,
-        "contentType": "json",
-        "specifyBody": "string",
+        "contentType": "raw",
+        "rawContentType": "application/json",
         "body": "={{ JSON.stringify({ messageId: $json.messageId, threadId: $json.threadId, from: $json.from, fromName: $json.fromName, subject: $json.subject, body: $json.body }) }}",
         "options": {}
       }
@@ -104,8 +102,8 @@
           ]
         },
         "sendBody": true,
-        "contentType": "json",
-        "specifyBody": "string",
+        "contentType": "raw",
+        "rawContentType": "application/json",
         "body": "={{ JSON.stringify({ gmail_message_id: $json.messageId, gmail_thread_id: $json.threadId, sender_email: $json.from, sender_name: $json.fromName, subject: $json.subject, body: $json.body, received_at: $json.receivedAt }) }}",
         "options": {}
       }
@@ -129,8 +127,8 @@
           ]
         },
         "sendBody": true,
-        "contentType": "json",
-        "specifyBody": "string",
+        "contentType": "raw",
+        "rawContentType": "application/json",
         "body": "={{ JSON.stringify({ email_id: $('Supabase - Insert Email').first().json.id, category: $('Merge Email + Claude').first().json.category, urgency_score: Number($('Merge Email + Claude').first().json.urgencyScore), urgency_label: $('Merge Email + Claude').first().json.urgencyLabel, reasoning: $('Merge Email + Claude').first().json.reasoning }) }}",
         "options": {}
       }
@@ -174,8 +172,8 @@
           ]
         },
         "sendBody": true,
-        "contentType": "json",
-        "specifyBody": "string",
+        "contentType": "raw",
+        "rawContentType": "application/json",
         "body": "={{ JSON.stringify({ email_id: $('Supabase - Insert Email').first().json.id, draft_content: $('Merge Email + Claude').first().json.draft, gmail_draft_id: $('Gmail - Create Draft').first().json.id, status: 'pending' }) }}",
         "options": {}
       }
@@ -194,8 +192,8 @@
           "parameters": [{ "name": "Content-Type", "value": "application/json" }]
         },
         "sendBody": true,
-        "contentType": "json",
-        "specifyBody": "string",
+        "contentType": "raw",
+        "rawContentType": "application/json",
         "body": "={{ (() => { const d = $('Merge Email + Claude').first().json; const emailId = $('Supabase - Insert Email').first().json.id; const emojis = { hot: '🔴', warm: '🟡', cold: '🟢', skip: '⚪' }; const cats = { lead_inquiry: 'New Lead', existing_client: 'Existing Client', agent_colleague: 'Agent / Colleague', listing_related: 'Listing / Vendor', spam: 'Spam' }; const emoji = emojis[d.urgencyLabel] || '⚪'; const preview = (d.draft || '').slice(0, 280); return JSON.stringify({ blocks: [ { type: 'header', text: { type: 'plain_text', text: emoji + ' ' + d.subject, emoji: true } }, { type: 'section', fields: [ { type: 'mrkdwn', text: '*From:*\\n' + (d.fromName ? d.fromName + ' <' + d.from + '>' : d.from) }, { type: 'mrkdwn', text: '*Classification:*\\n' + (cats[d.category] || d.category) }, { type: 'mrkdwn', text: '*Urgency:*\\n' + emoji + ' ' + d.urgencyLabel.toUpperCase() + ' (' + d.urgencyScore + '/5)' }, { type: 'mrkdwn', text: '*Why:*\\n' + d.reasoning } ] }, { type: 'divider' }, { type: 'section', text: { type: 'mrkdwn', text: '*Draft Preview:*\\n```' + preview + (d.draft.length > 280 ? '…' : '') + '```' } }, { type: 'context', elements: [{ type: 'mrkdwn', text: 'Email ID: `' + emailId + '` · Review in Gmail Drafts' }] } ] }); })() }}",
         "options": {}
       }
