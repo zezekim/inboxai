@@ -6,11 +6,11 @@ An AI-powered email triage and draft generation system for real estate professio
 
 ## Overview
 
-InboxAI was built for **Paul Smith, GRI** at **Twelve Rivers Realty** in Austin, Texas. Every unread Gmail is automatically:
+Every unread Gmail is automatically:
 
 1. Pulled from Gmail every 5 minutes via n8n
 2. Classified into one of 5 categories with an urgency score
-3. Drafted by Claude in Paul's voice using a detailed knowledge base
+3. Drafted by Claude using a configurable knowledge base
 4. Stored in Supabase
 5. Saved as a Gmail draft (unsent)
 6. Sent as a Slack notification for immediate awareness
@@ -22,7 +22,7 @@ InboxAI was built for **Paul Smith, GRI** at **Twelve Rivers Realty** in Austin,
 
 - **5-Category Email Classification** — `lead_inquiry`, `existing_client`, `agent_colleague`, `listing_related`, `spam`
 - **Urgency Scoring (0–5)** — `hot` (4–5), `warm` (2–3), `cold` (1), `skip` (0/spam)
-- **AI Draft Generation** — Claude writes replies in Paul's voice, with reasoning and full signature
+- **AI Draft Generation** — Claude writes replies in your voice, with reasoning and full signature
 - **Prompt Caching** — Knowledge base is cached with Anthropic's ephemeral cache for efficient token use
 - **Gmail Draft Creation** — Drafts are saved in Gmail (not auto-sent) and linked to the original thread
 - **Slack Notifications** — Real-time alerts with classification, urgency, reasoning, and draft preview
@@ -87,7 +87,7 @@ inboxai/
 │   ├── agent.js            # Claude API integration (classification + draft generation)
 │   └── server.js           # Express.js server for local/production use
 ├── knowledge/
-│   └── paul-smith-kb.js    # Paul's voice profile, market expertise, communication style
+│   └── paul-smith-kb.js    # Agent voice profile, market expertise, communication style
 ├── n8n/
 │   └── workflow.json       # n8n automation workflow (import this into n8n)
 ├── public/
@@ -202,7 +202,7 @@ Classifies an email and generates a draft reply.
   "from": "buyer@example.com",
   "fromName": "Jane Doe",
   "subject": "Interested in 2415 S Lamar",
-  "body": "Hi Paul, I saw your listing on Zillow...",
+  "body": "Hi, I saw your listing on Zillow...",
   "messageId": "18abc123def456",
   "threadId": "18abc123000000"
 }
@@ -216,7 +216,7 @@ Classifies an email and generates a draft reply.
   "urgencyScore": 5,
   "urgencyLabel": "hot",
   "reasoning": "New buyer lead on an active listing — immediate follow-up required.",
-  "draft": "Hi Jane, Thanks for reaching out...\n\nPaul Smith, GRI\n...",
+  "draft": "Hi Jane, Thanks for reaching out...\n\n[Agent Name]\n...",
   "inputTokens": 2400,
   "cacheReadTokens": 1800,
   "cacheCreationTokens": 600,
@@ -264,16 +264,15 @@ The Supabase URL and anon key are configured at the top of `public/index.html`. 
 
 ## Knowledge Base
 
-`knowledge/paul-smith-kb.js` contains a detailed profile used in every Claude system prompt:
+`knowledge/paul-smith-kb.js` contains a detailed agent profile used in every Claude system prompt:
 
-- 18+ years of Austin real estate experience
-- 750+ closed transactions, $350M+ in sales volume
-- Twelve Rivers Realty office details (address, phone, philosophy)
-- Market specialties: South Austin, Westlake, Hyde Park, Hill Country
-- Paul's communication style: direct, warm, brief, jargon-free
+- Agent background, experience, and credentials
+- Brokerage details (address, phone, philosophy)
+- Market specialties and geographic focus areas
+- Communication style: direct, warm, brief, jargon-free
 - Common email scenarios with expected response tone
 - Exact email signature format
-- Phrases Paul would never write
+- Phrases the agent would never write
 
 This file is the single source of truth for Claude's voice and persona. Edit it to adapt InboxAI for any agent.
 
